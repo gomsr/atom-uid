@@ -1,9 +1,33 @@
 package worker
 
+import "github.com/micro-services-roadmap/uid-generator-go/worker/workers"
+
+type Type uint
+
+const (
+	LocalWorkerId Type = iota
+	DbWorkerId
+	CloudflareWorkerId
+)
+
 // IdAssigner defines an interface for assigning worker IDs.
 type IdAssigner interface {
 
-	// AssignWorkerId assigns a worker ID for the DefaultUidGenerator.
+	// NextWorkerId assigns a worker ID for the DefaultUidGenerator.
 	// Returns the assigned worker ID.
-	AssignWorkerId() int64
+	NextWorkerId() int64
+}
+
+func (c Type) Instance() IdAssigner {
+	var assigner IdAssigner
+	switch c {
+	case DbWorkerId:
+		assigner = &workers.LocalAssigner{}
+	case CloudflareWorkerId:
+		assigner = &workers.CloudflareAssigner{}
+	default:
+		assigner = &workers.LocalAssigner{}
+	}
+
+	return assigner
 }

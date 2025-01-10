@@ -1,13 +1,12 @@
-package worker
+package workers
 
 import (
-	"github.com/micro-services-roadmap/cloudflare/kv/worker"
+	"github.com/micro-services-roadmap/cloudflare/kvs/worker"
 )
 
-type CloudflareAssigner struct {
-}
+type CloudflareAssigner struct{}
 
-func (c CloudflareAssigner) AssignWorkerId() int64 {
+func (c *CloudflareAssigner) NextWorkerId() int64 {
 	for i := 0; i < 10; i++ {
 		if id, err := worker.NextWorkerID(); err != nil {
 			continue
