@@ -21,7 +21,7 @@ func New() (*DefaultShortUrl, error) {
 }
 
 func NewV6() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(28, 3, 3, rand.Int63n(2^3), "2020-10-12")
+	gen6, err := generators.NewDefaultUidGenerator(64-1-3-3, 3, 3, rand.Int63n(2^3), "2020-10-12")
 	if err != nil {
 		return nil, err
 	} else {
@@ -30,7 +30,7 @@ func NewV6() (*DefaultShortUrl, error) {
 }
 
 func NewV7() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(30, 6, 5, rand.Int63n(2^6))
+	gen6, err := generators.NewDefaultUidGenerator(64-1-6-5, 6, 5, rand.Int63n(2^6), "2020-10-12")
 	if err != nil {
 		return nil, err
 	} else {
@@ -39,7 +39,7 @@ func NewV7() (*DefaultShortUrl, error) {
 }
 
 func NewV8() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(32, 8, 9, rand.Int63n(2^8))
+	gen6, err := generators.NewDefaultUidGenerator(64-1-8-9, 8, 9, rand.Int63n(2^8), "2020-10-12")
 	if err != nil {
 		return nil, err
 	} else {
@@ -48,5 +48,5 @@ func NewV8() (*DefaultShortUrl, error) {
 }
 
 func (c *DefaultShortUrl) ShortUrl() string {
-	return utilu.ToBase62(c.GetUID())
+	return utilu.ToBase62R(c.GetUID())
 }

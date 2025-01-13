@@ -4,7 +4,7 @@ import "strings"
 
 const Base62Chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-func ToBase62(n int64) string {
+func ToBase62R(n int64) string {
 	if n == 0 {
 		return "0"
 	}
@@ -16,7 +16,11 @@ func ToBase62(n int64) string {
 		n = n / 62
 	}
 
-	return Reverse(result.String())
+	return result.String()
+}
+
+func ToBase62(n int64) string {
+	return Reverse(ToBase62R(n))
 }
 
 func Base62ToDecimal(base62 string) int64 {
