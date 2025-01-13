@@ -14,7 +14,7 @@ func TestToBase62(t *testing.T) {
 
 func TestV2(t *testing.T) {
 	// 步骤 1: 将62进制数转换为十进制
-	decimalValue := Base62ToDecimal("1000000")
+	decimalValue := Base62ToDecimal("zzzzzz")
 	fmt.Printf("62进制 %s 转换为十进制: %d\n", "100000", decimalValue)
 
 	// 步骤 2: 将十进制数转换为二进制

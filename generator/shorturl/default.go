@@ -20,8 +20,9 @@ func New() (*DefaultShortUrl, error) {
 	}
 }
 
+// NewV6 it will be valid util 2029-07-30
 func NewV6() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(64-1-3-3, 3, 3, rand.Int63n(2^3), "2020-10-12")
+	gen6, err := generators.NewDefaultUidGenerator(64-1-3-3, 3, 3, rand.Int63n(2^3), "2024-07-30")
 	if err != nil {
 		return nil, err
 	} else {
@@ -29,8 +30,9 @@ func NewV6() (*DefaultShortUrl, error) {
 	}
 }
 
+// NewV7 it will be valid util 2053-07-30
 func NewV7() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(64-1-6-5, 6, 5, rand.Int63n(2^6), "2020-10-12")
+	gen6, err := generators.NewDefaultUidGenerator(64-1-6-5, 6, 5, rand.Int63n(2^6), "2023-07-30")
 	if err != nil {
 		return nil, err
 	} else {
@@ -38,8 +40,9 @@ func NewV7() (*DefaultShortUrl, error) {
 	}
 }
 
+// NewV8 it will be valid util 2050-07-30
 func NewV8() (*DefaultShortUrl, error) {
-	gen6, err := generators.NewDefaultUidGenerator(64-1-8-9, 8, 9, rand.Int63n(2^8), "2020-10-12")
+	gen6, err := generators.NewDefaultUidGenerator(64-1-8-9, 8, 9, rand.Int63n(2^8), "2023-07-30")
 	if err != nil {
 		return nil, err
 	} else {
