@@ -1,7 +1,6 @@
 package generators
 
 import (
-	"errors"
 	"fmt"
 	"github.com/micro-services-roadmap/uid-generator-go/generator"
 	"sync"
@@ -15,7 +14,7 @@ type DefaultUidGenerator struct {
 	seqBits       int
 	epochStr      string
 	epochSeconds  int64
-	bitsAllocator *generator.BitsAllocator
+	BitsAllocator *generator.BitsAllocator
 	workerId      int64
 	sequence      int64
 	lastSecond    int64
@@ -24,15 +23,15 @@ type DefaultUidGenerator struct {
 
 // NewDefaultUidGenerator creates a new DefaultUidGenerator instance
 func NewDefaultUidGenerator(timeBits, workerBits, seqBits int, workerId int64, epochStr ...string) (*DefaultUidGenerator, error) {
-	if timeBits+workerBits+seqBits+1 != generator.TotalBits {
-		return nil, errors.New("the sum of timeBits, workerBits, and seqBits must be 63")
-	}
+	//if timeBits+workerBits+seqBits+1 != generator.TotalBits {
+	//	return nil, errors.New("the sum of timeBits, workerBits, and seqBits must be 63")
+	//}
 
 	gtor := &DefaultUidGenerator{
 		timeBits:      timeBits,
 		workerBits:    workerBits,
 		seqBits:       seqBits,
-		bitsAllocator: generator.NewBitsAllocator(timeBits, workerBits, seqBits),
+		BitsAllocator: generator.NewBitsAllocator(timeBits, workerBits, seqBits),
 		workerId:      workerId,
 	}
 
@@ -84,7 +83,7 @@ func (g *DefaultUidGenerator) nextId() (int64, error) {
 
 	// Increase sequence at the same second
 	if currentSecond == g.lastSecond {
-		g.sequence = (g.sequence + 1) & g.bitsAllocator.GetMaxSequence()
+		g.sequence = (g.sequence + 1) & g.BitsAllocator.GetMaxSequence()
 		// Exceed sequence max, wait for the next second
 		if g.sequence == 0 {
 			currentSecond = g.getNextSecond(g.lastSecond)
@@ -97,13 +96,13 @@ func (g *DefaultUidGenerator) nextId() (int64, error) {
 	g.lastSecond = currentSecond
 
 	// Allocate the bits for UID
-	return g.bitsAllocator.Allocate(currentSecond-g.epochSeconds, g.workerId, g.sequence), nil
+	return g.BitsAllocator.Allocate(currentSecond-g.epochSeconds, g.workerId, g.sequence), nil
 }
 
 // getCurrentSecond gets the current second
 func (g *DefaultUidGenerator) getCurrentSecond() (int64, error) {
 	currentSecond := time.Now().Unix()
-	if currentSecond-g.epochSeconds > g.bitsAllocator.GetMaxDeltaSeconds() {
+	if currentSecond-g.epochSeconds > g.BitsAllocator.GetMaxDeltaSeconds() {
 		return 0, fmt.Errorf("timestamp bits are exhausted. Refusing UID generation")
 	}
 	return currentSecond, nil
@@ -122,10 +121,10 @@ func (g *DefaultUidGenerator) getNextSecond(lastTimestamp int64) int64 {
 // ParseUID parses a UID and returns its components as a string
 func (g *DefaultUidGenerator) ParseUID(uid int64) string {
 	totalBits := generator.TotalBits
-	signBits := g.bitsAllocator.GetSignBits()
-	timestampBits := g.bitsAllocator.GetTimestampBits()
-	workerIdBits := g.bitsAllocator.GetWorkerIdBits()
-	sequenceBits := g.bitsAllocator.GetSequenceBits()
+	signBits := g.BitsAllocator.GetSignBits()
+	timestampBits := g.BitsAllocator.GetTimestampBits()
+	workerIdBits := g.BitsAllocator.GetWorkerIdBits()
+	sequenceBits := g.BitsAllocator.GetSequenceBits()
 
 	// Parse UID
 	sequence := (uid << uint(totalBits-sequenceBits)) >> uint(totalBits-sequenceBits)

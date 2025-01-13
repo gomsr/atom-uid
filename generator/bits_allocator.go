@@ -26,10 +26,10 @@ type BitsAllocator struct {
 // NewBitsAllocator creates a new BitsAllocator with the specified bit lengths
 func NewBitsAllocator(timestampBits, workerIdBits, sequenceBits int) *BitsAllocator {
 	// Ensure we allocate 64 bits
-	totalBits := 1 + timestampBits + workerIdBits + sequenceBits
-	if totalBits != TotalBits {
-		panic("Total bits do not add up to 64")
-	}
+	//totalBits := 1 + timestampBits + workerIdBits + sequenceBits
+	//if totalBits != TotalBits {
+	//	panic("Total bits do not add up to 64")
+	//}
 
 	maxDeltaSeconds := ^(-1 << uint(timestampBits))
 	maxWorkerId := ^(-1 << uint(workerIdBits))

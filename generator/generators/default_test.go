@@ -10,7 +10,7 @@ import (
 var gtor generator.UidGenerator
 
 func init() {
-	if g, err := NewDefaultUidGenerator(28, 22, 13, worker.CloudflareWorkerId.Instance().NextWorkerId()); err != nil {
+	if g, err := NewDefaultUidGenerator(28, 11, 24, worker.CloudflareWorkerId.Instance().NextWorkerId()); err != nil {
 		panic(err)
 	} else {
 		gtor = g
