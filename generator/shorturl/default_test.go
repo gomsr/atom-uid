@@ -10,7 +10,10 @@ var v7, _ = NewV7()
 var v8, _ = NewV8()
 
 func TestDefaultShortUrl_ShortUrl(t *testing.T) {
-	println(v6.GetUID())
+	uid := v6.MustUID()
+	println(uid)
+
+	print(v6.ParseUID(uid))
 	println(v6.ShortUrl())
 }
 

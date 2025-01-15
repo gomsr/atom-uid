@@ -10,30 +10,62 @@ import (
 	"time"
 )
 
-// DefaultUidGenerator represents the UID generator
-type DefaultUidGenerator struct {
-	timeBits      int
-	workerBits    int
-	seqBits       int
-	epochStr      string
+type DefaultConfig struct {
+	timeBits   int
+	workerBits int
+	seqBits    int
+	workerId   int64
+	epochStr   string
+}
+type OptionFunc func(v *DefaultConfig)
+
+func TimeBits(timeBits int) OptionFunc {
+	return func(config *DefaultConfig) {
+		config.timeBits = timeBits
+	}
+}
+func WorkerBits(workerBits int) OptionFunc {
+	return func(config *DefaultConfig) {
+		config.workerBits = workerBits
+	}
+}
+func SeqBits(seqBits int) OptionFunc {
+	return func(config *DefaultConfig) {
+		config.seqBits = seqBits
+	}
+}
+func WorkerId(workerId int64) OptionFunc {
+	return func(config *DefaultConfig) {
+		config.workerId = workerId
+	}
+}
+func EpochStr(epochStr string) OptionFunc {
+	return func(config *DefaultConfig) {
+		config.epochStr = epochStr
+	}
+}
+
+// DefaultUidGeneratorV2 represents the UID generator
+type DefaultUidGeneratorV2 struct {
+	*DefaultConfig
 	epochSeconds  int64
 	BitsAllocator *generator.BitsAllocator
-	workerId      int64
 	sequence      int64
 	lastSecond    int64
 	mu            sync.Mutex
 }
 
-func NewWithConfig(conf *config.Config) (*DefaultUidGenerator, error) {
+func NewWithConfigV2(conf *config.Config) (*DefaultUidGeneratorV2, error) {
 	if conf == nil {
 		return nil, errors.New("config is nil")
 	}
 
 	wid := conf.IdAssigner.Instance().NextWorkerId()
-	return NewDefaultUidGenerator(conf.TimeBits, conf.WorkerBits, conf.SeqBits, wid, conf.EpochStr)
+	return NewWithOptions(TimeBits(conf.TimeBits), WorkerBits(conf.WorkerBits),
+		SeqBits(conf.SeqBits), WorkerId(wid), EpochStr(conf.EpochStr))
 }
 
-func New(workerId ...int64) (*DefaultUidGenerator, error) {
+func NewV2(workerId ...int64) (*DefaultUidGeneratorV2, error) {
 	var wid int64
 	if len(workerId) > 0 {
 		wid = workerId[0]
@@ -41,36 +73,44 @@ func New(workerId ...int64) (*DefaultUidGenerator, error) {
 		wid = worker.CloudflareWorkerId.Instance().NextWorkerId()
 	}
 
-	return NewDefaultUidGenerator(28, 11, 24, wid)
+	return NewWithOptions(TimeBits(28), WorkerBits(11), SeqBits(24), WorkerId(wid))
 }
 
-// NewDefaultUidGenerator creates a new DefaultUidGenerator instance
-func NewDefaultUidGenerator(timeBits, workerBits, seqBits int, workerId int64, epochStr ...string) (*DefaultUidGenerator, error) {
+// NewWithOptions creates a new DefaultUidGenerator instance
+func NewWithOptions(ops ...OptionFunc) (*DefaultUidGeneratorV2, error) {
 	//if timeBits+workerBits+seqBits+1 != generator.TotalBits {
 	//	return nil, errors.New("the sum of timeBits, workerBits, and seqBits must be 63")
 	//}
 
-	gtor := &DefaultUidGenerator{
-		timeBits:      timeBits,
-		workerBits:    workerBits,
-		seqBits:       seqBits,
-		BitsAllocator: generator.NewBitsAllocator(timeBits, workerBits, seqBits),
-		workerId:      workerId,
+	dc := &DefaultConfig{
+		timeBits:   28,
+		workerBits: 11,
+		seqBits:    24,
+		workerId:   worker.CloudflareWorkerId.Instance().NextWorkerId(),
+	}
+	for _, opFunc := range ops {
+		opFunc(dc)
 	}
 
-	if len(epochStr) == 0 {
+	allocator := generator.NewBitsAllocator(dc.timeBits, dc.workerBits, dc.seqBits)
+	gtor := &DefaultUidGeneratorV2{
+		DefaultConfig: dc,
+		BitsAllocator: allocator,
+	}
+
+	if len(dc.epochStr) == 0 {
 		gtor.epochStr = generator.EpochStr
 		dt, _ := time.Parse(generator.EpochStrFormat, generator.EpochStr)
 		gtor.epochSeconds = dt.Unix()
 		return gtor, nil
 	}
 
-	if parse, err := time.Parse(generator.EpochStrFormat, epochStr[0]); err != nil {
+	if parse, err := time.Parse(generator.EpochStrFormat, dc.epochStr); err != nil {
 		gtor.epochStr = generator.EpochStr
 		dt, _ := time.Parse(generator.EpochStrFormat, generator.EpochStr)
 		gtor.epochSeconds = dt.Unix()
 	} else {
-		gtor.epochStr = epochStr[0]
+		gtor.epochStr = dc.epochStr
 		gtor.epochSeconds = parse.Unix()
 	}
 
@@ -78,7 +118,7 @@ func NewDefaultUidGenerator(timeBits, workerBits, seqBits int, workerId int64, e
 }
 
 // GetUID generates a unique ID
-func (g *DefaultUidGenerator) GetUID() (int64, error) {
+func (g *DefaultUidGeneratorV2) GetUID() (int64, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -86,7 +126,7 @@ func (g *DefaultUidGenerator) GetUID() (int64, error) {
 }
 
 // MustUID generates a unique ID
-func (g *DefaultUidGenerator) MustUID() int64 {
+func (g *DefaultUidGeneratorV2) MustUID() int64 {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -100,7 +140,7 @@ func (g *DefaultUidGenerator) MustUID() int64 {
 }
 
 // nextId generates the next UID
-func (g *DefaultUidGenerator) nextId() (int64, error) {
+func (g *DefaultUidGeneratorV2) nextId() (int64, error) {
 	currentSecond, err := g.getCurrentSecond()
 	if err != nil {
 		return 0, err
@@ -131,7 +171,7 @@ func (g *DefaultUidGenerator) nextId() (int64, error) {
 }
 
 // getCurrentSecond gets the current second
-func (g *DefaultUidGenerator) getCurrentSecond() (int64, error) {
+func (g *DefaultUidGeneratorV2) getCurrentSecond() (int64, error) {
 	currentSecond := time.Now().Unix()
 	if currentSecond-g.epochSeconds > g.BitsAllocator.GetMaxDeltaSeconds() {
 		return 0, fmt.Errorf("timestamp bits are exhausted. Refusing UID generation")
@@ -140,7 +180,7 @@ func (g *DefaultUidGenerator) getCurrentSecond() (int64, error) {
 }
 
 // getNextSecond waits for the next second if the current second is exhausted
-func (g *DefaultUidGenerator) getNextSecond(lastTimestamp int64) int64 {
+func (g *DefaultUidGeneratorV2) getNextSecond(lastTimestamp int64) int64 {
 	for {
 		timestamp := time.Now().Unix()
 		if timestamp > lastTimestamp {
@@ -150,7 +190,7 @@ func (g *DefaultUidGenerator) getNextSecond(lastTimestamp int64) int64 {
 }
 
 // ParseUID parses a UID and returns its components as a string
-func (g *DefaultUidGenerator) ParseUID(uid int64) string {
+func (g *DefaultUidGeneratorV2) ParseUID(uid int64) string {
 	totalBits := generator.TotalBits
 	signBits := g.BitsAllocator.GetSignBits()
 	timestampBits := g.BitsAllocator.GetTimestampBits()

@@ -51,5 +51,5 @@ func NewV8() (*DefaultShortUrl, error) {
 }
 
 func (c *DefaultShortUrl) ShortUrl() string {
-	return utilu.ToBase62R(c.GetUID())
+	return utilu.ToBase62R(c.MustUID())
 }
