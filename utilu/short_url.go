@@ -1,5 +1,7 @@
 package utilu
 
+// https://github.com/micro-services-roadmap/oneid-core/blob/master/utilo/uids.go
+
 import (
 	"crypto"
 	"crypto/md5"

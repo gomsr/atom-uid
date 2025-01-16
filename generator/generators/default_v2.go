@@ -79,7 +79,7 @@ func NewV2(workerId ...int64) (*DefaultUidGeneratorV2, error) {
 // NewWithOptions creates a new DefaultUidGenerator instance
 func NewWithOptions(ops ...OptionFunc) (*DefaultUidGeneratorV2, error) {
 	//if timeBits+workerBits+seqBits+1 != generator.TotalBits {
-	//	return nil, errors.New("the sum of timeBits, workerBits, and seqBits must be 63")
+	//	return nil, errors.NewDefault("the sum of timeBits, workerBits, and seqBits must be 63")
 	//}
 
 	dc := &DefaultConfig{

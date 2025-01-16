@@ -8,6 +8,10 @@ type UidProvider interface {
 	provide(epochSeconds, momentInSecond int64) []int64
 }
 
+func NewCachedUidProvider(g *generator.BitsAllocator) *CachedUidProvider {
+	return &CachedUidProvider{g}
+}
+
 type CachedUidProvider struct {
 	*generator.BitsAllocator
 }
@@ -19,7 +23,7 @@ func (c *CachedUidProvider) provide(epochSeconds, currentSecond int64) []int64 {
 
 	firstSeqUid := c.Allocate(currentSecond-epochSeconds, c.GetMaxWorkerId(), 0)
 	for offset := int64(0); offset < listSize; offset++ {
-		uidList[offset] = firstSeqUid + int64(offset)
+		uidList[offset] = firstSeqUid + offset
 	}
 
 	return uidList

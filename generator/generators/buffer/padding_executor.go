@@ -9,20 +9,29 @@ import (
 
 // PaddingExecutor Represents an executor for padding {@link RingBuffer}<br>
 //
-//	There are two kinds of executors: one for scheduled padding, the other for padding immediately.
-type PaddingExecutor struct {
+// There are two kinds of executors: one for scheduled padding, the other for padding immediately.
+type PaddingExecutor interface {
+	PaddingBuffer()
+	AsyncPadding()
+	StartSchedule()
+	Shutdown()
+}
+
+type SchedulePaddingExecutor struct {
+	epochSeconds        int64 // 冗余
 	running             atomic.Bool
 	lastSecond          atomic.Int64
 	ringBuffer          *RingBuffer
 	uidProvider         UidProvider
-	bufferPadExecutors  sync.WaitGroup
-	bufferPadSchedule   *time.Ticker
 	scheduleInterval    time.Duration
+	bufferPadSchedule   *time.Ticker
+	mu                  sync.WaitGroup
 	stopPaddingSchedule chan struct{}
 }
 
-func NewBufferPaddingExecutor(ringBuffer *RingBuffer, uidProvider UidProvider, usingSchedule bool, interval time.Duration) *PaddingExecutor {
-	executor := &PaddingExecutor{
+func NewBufferPaddingExecutor(ringBuffer *RingBuffer, uidProvider UidProvider, epochSeconds int64, interval time.Duration) *SchedulePaddingExecutor {
+	executor := &SchedulePaddingExecutor{
+		epochSeconds:        epochSeconds,
 		ringBuffer:          ringBuffer,
 		uidProvider:         uidProvider,
 		scheduleInterval:    interval,
@@ -30,16 +39,17 @@ func NewBufferPaddingExecutor(ringBuffer *RingBuffer, uidProvider UidProvider, u
 	}
 
 	executor.lastSecond.Store(time.Now().Unix())
-
-	if usingSchedule {
+	if interval > 0 {
 		executor.bufferPadSchedule = time.NewTicker(interval)
 		go executor.StartSchedule()
 	}
 
+	executor.PaddingBuffer()
+
 	return executor
 }
 
-func (e *PaddingExecutor) StartSchedule() {
+func (e *SchedulePaddingExecutor) StartSchedule() {
 	for {
 		select {
 		case <-e.bufferPadSchedule.C:
@@ -50,16 +60,16 @@ func (e *PaddingExecutor) StartSchedule() {
 	}
 }
 
-func (e *PaddingExecutor) AsyncPadding() {
-	e.bufferPadExecutors.Add(1)
+func (e *SchedulePaddingExecutor) AsyncPadding() {
+	e.mu.Add(1)
 	go func() {
-		defer e.bufferPadExecutors.Done()
+		defer e.mu.Done()
 		e.PaddingBuffer()
 	}()
 }
 
-func (e *PaddingExecutor) PaddingBuffer() {
-	fmt.Printf("Ready to padding buffer lastSecond: %d", e.lastSecond.Load())
+func (e *SchedulePaddingExecutor) PaddingBuffer() {
+	fmt.Printf("Ready to padding buffer lastSecond: %d\n", e.lastSecond.Load())
 
 	if !e.running.CompareAndSwap(false, true) {
 		fmt.Println("Padding buffer is still running.")
@@ -69,7 +79,7 @@ func (e *PaddingExecutor) PaddingBuffer() {
 
 	isFullRingBuffer := false
 	for !isFullRingBuffer {
-		uids := e.uidProvider.provide(e.lastSecond.Add(1))
+		uids := e.uidProvider.provide(e.epochSeconds, e.lastSecond.Add(1))
 		for _, uid := range uids {
 			if !e.ringBuffer.Put(uid) {
 				isFullRingBuffer = true
@@ -81,20 +91,10 @@ func (e *PaddingExecutor) PaddingBuffer() {
 	fmt.Printf("End to padding buffer lastSecond: %d", e.lastSecond.Load())
 }
 
-func (e *PaddingExecutor) Shutdown() {
+func (e *SchedulePaddingExecutor) Shutdown() {
 	if e.bufferPadSchedule != nil {
 		close(e.stopPaddingSchedule)
 		e.bufferPadSchedule.Stop()
 	}
-	e.bufferPadExecutors.Wait()
-}
-
-func (e *PaddingExecutor) SetScheduleInterval(interval time.Duration) {
-	if interval <= 0 {
-		panic("Schedule interval must be positive!")
-	}
-	e.scheduleInterval = interval
-	if e.bufferPadSchedule != nil {
-		e.bufferPadSchedule.Reset(interval)
-	}
+	e.mu.Wait()
 }

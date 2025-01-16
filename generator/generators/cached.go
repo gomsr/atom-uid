@@ -4,52 +4,99 @@ import (
 	"fmt"
 	"github.com/micro-services-roadmap/uid-generator-go/generator"
 	"github.com/micro-services-roadmap/uid-generator-go/generator/generators/buffer"
-	"log"
 	"sync"
 	"time"
 )
 
+const (
+	BoostPower       = 3
+	PaddingFactor    = 50
+	ScheduleInterval = 60 * time.Second
+)
+
 type CachedUidGenerator struct {
-	*DefaultUidGenerator
-	boostPower            int
-	paddingFactor         int
-	scheduleInterval      time.Duration
-	ringBuffer            *buffer.RingBuffer
-	bufferPaddingExecutor *buffer.PaddingExecutor
-	rejectedPutHandler    buffer.RejectedPutHandler
-	rejectedTakeHandler   buffer.RejectedTakeHandler
-	bitsAllocator         *generator.BitsAllocator
-	epochSeconds          int64
-	workerID              int64
-	mu                    sync.Mutex
+	timeBits      int
+	workerBits    int
+	seqBits       int
+	epochStr      string
+	epochSeconds  int64
+	bitsAllocator *generator.BitsAllocator
+	workerId      int64
+	sequence      int64
+	lastSecond    int64
+	mu            sync.Mutex
+
+	boostPower    int
+	paddingFactor int
+	ringBuffer    *buffer.RingBuffer
 }
 
-func NewCachedUidGenerator(bitsAllocator *generator.BitsAllocator, workerID int64, epochSeconds int64) *CachedUidGenerator {
-	return &CachedUidGenerator{
-		boostPower:       3, // Default boost power
-		paddingFactor:    buffer.DefaultPaddingPercent,
-		bitsAllocator:    bitsAllocator,
-		workerID:         workerID,
-		epochSeconds:     epochSeconds,
-		scheduleInterval: 60 * time.Second, // Default interval
+func NewCached(workerId int64) *CachedUidGenerator {
+	return NewCachedUidGenerator(28, 15, 20,
+		BoostPower, PaddingFactor, ScheduleInterval, workerId)
+}
+
+func NewCachedUidGenerator(timeBits, workerBits, seqBits, boostPower, paddingFactor int,
+	scheduleInterval time.Duration, workerId int64, epochStr ...string) *CachedUidGenerator {
+	gtor := &CachedUidGenerator{
+		timeBits:      timeBits,
+		workerBits:    workerBits,
+		seqBits:       seqBits,
+		bitsAllocator: generator.NewBitsAllocator(timeBits, workerBits, seqBits),
+		workerId:      workerId,
+		boostPower:    boostPower,
+		paddingFactor: paddingFactor,
 	}
+	// 2. 处理 epochStr
+	if len(epochStr) == 0 {
+		gtor.epochStr = generator.EpochStr
+		dt, _ := time.Parse(generator.EpochStrFormat, generator.EpochStr)
+		gtor.epochSeconds = dt.Unix()
+	} else {
+		if parse, err := time.Parse(generator.EpochStrFormat, epochStr[0]); err != nil {
+			gtor.epochStr = generator.EpochStr
+			dt, _ := time.Parse(generator.EpochStrFormat, generator.EpochStr)
+			gtor.epochSeconds = dt.Unix()
+		} else {
+			gtor.epochStr = epochStr[0]
+			gtor.epochSeconds = parse.Unix()
+		}
+	}
+
+	// 3. 创建 ringBuffer & 设置拒绝策略 & executor
+	bufferSize := int(gtor.bitsAllocator.GetMaxSequence()+1) << boostPower
+	ringBuffer := buffer.NewBuffer(int(bufferSize), gtor.paddingFactor)
+	fmt.Printf("Initialized ring buffer size: %d, paddingFactor: %d\n", bufferSize, gtor.paddingFactor)
+
+	// 4. 创建 PaddingExecutor
+	paddingExecutor := buffer.NewBufferPaddingExecutor(ringBuffer,
+		buffer.NewCachedUidProvider(gtor.bitsAllocator), gtor.epochSeconds, scheduleInterval)
+	ringBuffer.SetBufferPaddingExecutor(paddingExecutor)
+	fmt.Printf("Initialized BufferPaddingExecutor. Using schedule: %v, interval: %v\n", scheduleInterval > 0, scheduleInterval)
+
+	gtor.ringBuffer = ringBuffer
+	return gtor
 }
 
-//func (g *CachedUidGenerator) AfterPropertiesSet() {
-//	g.initRingBuffer()
-//	log.Println("Initialized RingBuffer successfully.")
-//}
-
-func (g *CachedUidGenerator) GetUID() int64 {
+func (g *CachedUidGenerator) GetUID() (int64, error) {
 	return g.ringBuffer.Take()
+}
+
+func (g *CachedUidGenerator) MustUID() int64 {
+	take, err := g.ringBuffer.Take()
+	if err != nil {
+		panic(err)
+	}
+
+	return take
 }
 
 func (g *CachedUidGenerator) ParseUID(uid int64) string {
 	totalBits := generator.TotalBits
-	signBits := g.BitsAllocator.GetSignBits()
-	timestampBits := g.BitsAllocator.GetTimestampBits()
-	workerIdBits := g.BitsAllocator.GetWorkerIdBits()
-	sequenceBits := g.BitsAllocator.GetSequenceBits()
+	signBits := g.bitsAllocator.GetSignBits()
+	timestampBits := g.bitsAllocator.GetTimestampBits()
+	workerIdBits := g.bitsAllocator.GetWorkerIdBits()
+	sequenceBits := g.bitsAllocator.GetSequenceBits()
 
 	// Parse UID
 	sequence := (uid << uint(totalBits-sequenceBits)) >> uint(totalBits-sequenceBits)
@@ -62,61 +109,23 @@ func (g *CachedUidGenerator) ParseUID(uid int64) string {
 		uid, thatTime.Format("2006-01-02 15:04:05"), workerId, sequence)
 }
 
-func (g *CachedUidGenerator) Destroy() {
-	g.bufferPaddingExecutor.Shutdown()
-}
-
-func (g *CachedUidGenerator) initRingBuffer() {
-	bufferSize := (g.bitsAllocator.GetMaxSequence() + 1) << g.boostPower
-	g.ringBuffer = buffer.NewRingBuffer(bufferSize, g.paddingFactor)
-
-	log.Printf("Initialized ring buffer size: %d, paddingFactor: %d\n", bufferSize, g.paddingFactor)
-
-	usingSchedule := g.scheduleInterval > 0
-	g.bufferPaddingExecutor = buffer.NewBufferPaddingExecutor(g.ringBuffer, &buffer.CachedUidProvider{}, usingSchedule, g.scheduleInterval)
-	if usingSchedule {
-		g.bufferPaddingExecutor.SetScheduleInterval(g.scheduleInterval)
-	}
-
-	log.Printf("Initialized BufferPaddingExecutor. Using schedule: %v, interval: %v\n", usingSchedule, g.scheduleInterval)
-
-	g.ringBuffer.SetBufferPaddingExecutor(g.bufferPaddingExecutor)
-
-	if g.rejectedPutHandler != nil {
-		g.ringBuffer.SetRejectedPutHandler(g.rejectedPutHandler)
-	}
-	if g.rejectedTakeHandler != nil {
-		g.ringBuffer.SetRejectedTakeHandler(g.rejectedTakeHandler)
-	}
-
-	g.bufferPaddingExecutor.PaddingBuffer()
-	g.bufferPaddingExecutor.StartSchedule()
-}
-
 func (g *CachedUidGenerator) SetBoostPower(boostPower int) {
 	if boostPower <= 0 {
-		log.Panic("Boost power must be positive!")
+		fmt.Println("Boost power must be positive!")
 	}
 	g.boostPower = boostPower
 }
 
 func (g *CachedUidGenerator) SetRejectedPutBufferHandler(handler buffer.RejectedPutHandler) {
 	if handler == nil {
-		log.Panic("RejectedPutBufferHandler can't be nil!")
+		fmt.Println("RejectedPutBufferHandler can't be nil!")
 	}
-	g.rejectedPutHandler = handler
+	g.ringBuffer.SetRejectedPutHandler(handler)
 }
 
 func (g *CachedUidGenerator) SetRejectedTakeBufferHandler(handler buffer.RejectedTakeHandler) {
 	if handler == nil {
-		log.Panic("RejectedTakeBufferHandler can't be nil!")
+		fmt.Println("RejectedTakeBufferHandler can't be nil!")
 	}
-	g.rejectedTakeHandler = handler
-}
-
-func (g *CachedUidGenerator) SetScheduleInterval(interval time.Duration) {
-	if interval <= 0 {
-		log.Panic("Schedule interval must be positive!")
-	}
-	g.scheduleInterval = interval
+	g.ringBuffer.SetRejectedTakeHandler(handler)
 }

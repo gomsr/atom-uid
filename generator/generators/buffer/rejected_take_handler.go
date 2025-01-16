@@ -1,6 +1,8 @@
 package buffer
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // RejectedTakeHandler If cursor catches the tail it means that the ring buffer is empty, any more buffer take request will be rejected.
 // Specify the policy to handle the reject. This is a Lambda supported interface
@@ -14,5 +16,4 @@ type PanicTakeBuffer struct{}
 func (c *PanicTakeBuffer) rejectTakeBuffer(ringBuffer *RingBuffer) {
 	err := fmt.Sprintf("Rejected take buffer. %v", ringBuffer)
 	fmt.Println(err)
-	panic(err)
 }

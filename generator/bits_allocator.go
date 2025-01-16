@@ -69,7 +69,7 @@ func (b *BitsAllocator) GetWorkerIdShift() int     { return b.workerIdShift }
 
 // String provides a string representation of BitsAllocator
 func (b *BitsAllocator) String() string {
-	return fmt.Sprintf("BitsAllocator{signBits: %d, timestampBits: %d, workerIdBits: %d, sequenceBits: %d, "+
+	return fmt.Sprintf("bitsAllocator{signBits: %d, timestampBits: %d, workerIdBits: %d, sequenceBits: %d, "+
 		"maxDeltaSeconds: %d, maxWorkerId: %d, maxSequence: %d, timestampShift: %d, workerIdShift: %d}",
 		b.signBits, b.timestampBits, b.workerIdBits, b.sequenceBits, b.maxDeltaSeconds, b.maxWorkerId,
 		b.maxSequence, b.timestampShift, b.workerIdShift)

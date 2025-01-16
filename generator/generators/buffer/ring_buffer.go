@@ -1,12 +1,15 @@
 package buffer
 
 import (
+	"errors"
+	"fmt"
+	"github.com/micro-services-roadmap/uid-generator-go/utilu"
 	"sync"
 	"sync/atomic"
 )
 
 const (
-	StartPoint                  = -1
+	StartPoint                  = int64(-1)
 	CanPutFlag            int32 = 0
 	CanTakeFlag           int32 = 1
 	DefaultPaddingPercent       = 50
@@ -23,26 +26,27 @@ const (
 //   - cursor: a sequence of the min slot position to consume<br/>
 type RingBuffer struct {
 	bufferSize            int
-	indexMask             int
+	indexMask             int64
 	slots                 []int64
 	flags                 []int32
-	tail                  int64
-	cursor                int64
+	tail                  atomic.Int64
+	cursor                atomic.Int64
 	paddingThreshold      int
 	rejectedPutHandler    RejectedPutHandler  // func(rb *RingBuffer, uid int64)
 	rejectedTakeHandler   RejectedTakeHandler // func(rb *RingBuffer)
-	bufferPaddingExecutor *PaddingExecutor    // func()
+	bufferPaddingExecutor PaddingExecutor     // func()
 	mu                    sync.Mutex
 }
 
-func New(bufferSize int) *RingBuffer {
-	return NewRingBuffer(bufferSize, DefaultPaddingPercent)
+func NewBuffer(bufferSize int, paddingFactor int) *RingBuffer {
+	return NewRingBuffer(bufferSize, paddingFactor, &DiscardPutBuffer{}, &PanicTakeBuffer{}, &SchedulePaddingExecutor{})
 }
 
 // NewRingBuffer creates a new RingBuffer
-func NewRingBuffer(bufferSize int, paddingFactor int) *RingBuffer {
+func NewRingBuffer(bufferSize int, paddingFactor int, put RejectedPutHandler, take RejectedTakeHandler, exec *SchedulePaddingExecutor) *RingBuffer {
 	if bufferSize <= 0 || bufferSize&(bufferSize-1) != 0 {
-		panic("bufferSize must be a power of 2 and positive")
+		bufferSize = utilu.NextPowerOfTwo(bufferSize)
+		fmt.Printf("bufferSize must be a power of 2 and positive, use the next power of two instead: %d\n", bufferSize)
 	}
 	if paddingFactor <= 0 || paddingFactor >= 100 {
 		panic("paddingFactor must be in (0, 100)")
@@ -50,16 +54,16 @@ func NewRingBuffer(bufferSize int, paddingFactor int) *RingBuffer {
 
 	rb := &RingBuffer{
 		bufferSize:            bufferSize,
-		indexMask:             bufferSize - 1,
+		indexMask:             int64(bufferSize - 1),
 		slots:                 make([]int64, bufferSize),
 		flags:                 make([]int32, bufferSize),
-		tail:                  StartPoint,
-		cursor:                StartPoint,
 		paddingThreshold:      bufferSize * paddingFactor / 100,
-		rejectedPutHandler:    &DiscardPutBuffer{},
-		rejectedTakeHandler:   &PanicTakeBuffer{},
-		bufferPaddingExecutor: &PaddingExecutor{},
+		rejectedPutHandler:    put,
+		rejectedTakeHandler:   take,
+		bufferPaddingExecutor: exec,
 	}
+	rb.tail.Store(StartPoint)
+	rb.cursor.Store(StartPoint)
 
 	// Initialize flags
 	for i := range rb.flags {
@@ -73,8 +77,8 @@ func (rb *RingBuffer) Put(uid int64) bool {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
-	currentTail := atomic.LoadInt64(&rb.tail)
-	currentCursor := atomic.LoadInt64(&rb.cursor)
+	currentTail := rb.tail.Load()
+	currentCursor := rb.cursor.Load()
 
 	// Check if the buffer is full
 	if currentTail-currentCursor == int64(rb.bufferSize)-1 {
@@ -83,7 +87,7 @@ func (rb *RingBuffer) Put(uid int64) bool {
 	}
 
 	// Calculate next slot index
-	nextTailIndex := (currentTail + 1) & int64(rb.indexMask)
+	nextTailIndex := (currentTail) & rb.indexMask
 	if !atomic.CompareAndSwapInt32(&rb.flags[nextTailIndex], CanPutFlag, CanTakeFlag) {
 		rb.rejectedPutHandler.rejectPutBuffer(rb, uid)
 		return false
@@ -91,27 +95,41 @@ func (rb *RingBuffer) Put(uid int64) bool {
 
 	// Put UID and update tail
 	rb.slots[nextTailIndex] = uid
-	atomic.AddInt64(&rb.tail, 1)
+	rb.tail.Add(1)
 	return true
 }
 
 // Take an UID from the ring
-func (rb *RingBuffer) Take() int64 {
-	for {
-		currentCursor := atomic.LoadInt64(&rb.cursor)
-		nextCursor := currentCursor + 1
-
-		if nextCursor > atomic.LoadInt64(&rb.tail) {
-			rb.rejectedTakeHandler.rejectTakeBuffer(rb)
-		}
-
-		// Calculate next slot index
-		nextCursorIndex := int(nextCursor & int64(rb.indexMask))
-		if atomic.CompareAndSwapInt32(&rb.flags[nextCursorIndex], CanTakeFlag, CanPutFlag) {
-			atomic.StoreInt64(&rb.cursor, nextCursor)
-			return rb.slots[nextCursorIndex]
-		}
+func (rb *RingBuffer) Take() (int64, error) {
+	// 获取当前游标并尝试更新
+	currentCursor := rb.cursor.Load()
+	nextCursor := rb.cursor.Add(1)
+	if nextCursor < currentCursor { // 防止溢出
+		return 0, errors.New("cursor can't move back")
 	}
+
+	currentTail := rb.tail.Load()
+	if nextCursor >= currentTail {
+		rb.rejectedTakeHandler.rejectTakeBuffer(rb)
+		return 0, errors.New("currentCursor cannot gt currentTail")
+	}
+
+	// 异步填充逻辑
+	if currentTail-nextCursor < int64(rb.paddingThreshold) {
+		fmt.Printf("Reach the padding threshold: %d, tail: %d, cursor: %d, rest: %d", rb.paddingThreshold, currentTail, nextCursor, currentTail-nextCursor)
+		rb.bufferPaddingExecutor.AsyncPadding()
+	}
+
+	// 获取当前槽位索引并检查状态
+	nextCursorIndex := (nextCursor) & rb.indexMask
+	uid := rb.slots[nextCursorIndex] // must before swap
+	if !atomic.CompareAndSwapInt32(&rb.flags[nextCursorIndex], CanTakeFlag, CanPutFlag) {
+		rb.rejectedTakeHandler.rejectTakeBuffer(rb)
+		return 0, errors.New("cursor not in can take status")
+	}
+
+	// 获取 UID 并更新状态
+	return uid, nil
 }
 
 // SetRejectedPutHandler sets the handler for rejected put operations
@@ -125,6 +143,6 @@ func (rb *RingBuffer) SetRejectedTakeHandler(handler RejectedTakeHandler) {
 }
 
 // SetBufferPaddingExecutor sets the buffer padding executor
-func (rb *RingBuffer) SetBufferPaddingExecutor(executor *PaddingExecutor) {
+func (rb *RingBuffer) SetBufferPaddingExecutor(executor *SchedulePaddingExecutor) {
 	rb.bufferPaddingExecutor = executor
 }

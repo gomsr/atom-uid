@@ -8,8 +8,8 @@ import (
 
 var gtor generator.UidGenerator
 
-func init() {
-	if g, err := New(); err != nil {
+func init1() {
+	if g, err := NewDefault(); err != nil {
 		panic(err)
 	} else {
 		gtor = g

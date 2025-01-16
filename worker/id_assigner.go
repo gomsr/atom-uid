@@ -22,7 +22,7 @@ func (c Type) Instance() IdAssigner {
 	var assigner IdAssigner
 	switch c {
 	case DbWorkerId:
-		assigner = &workers.LocalAssigner{}
+		assigner = &workers.DbAssigner{}
 	case CloudflareWorkerId:
 		assigner = &workers.CloudflareAssigner{}
 	default:
