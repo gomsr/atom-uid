@@ -2,8 +2,8 @@ package generators
 
 import (
 	"fmt"
-	"github.com/micro-services-roadmap/uid-generator-go/generator"
-	"github.com/micro-services-roadmap/uid-generator-go/generator/generators/buffer"
+	"github.com/gomsr/atom-uid/generator"
+	"github.com/gomsr/atom-uid/generator/generators/buffer"
 	"sync"
 	"time"
 )

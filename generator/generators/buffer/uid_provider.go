@@ -1,6 +1,6 @@
 package buffer
 
-import "github.com/micro-services-roadmap/uid-generator-go/generator"
+import "github.com/gomsr/atom-uid/generator"
 
 // UidProvider Buffered UID provider(Lambda supported), which provides UID in the same one second
 type UidProvider interface {

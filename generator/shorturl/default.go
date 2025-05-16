@@ -1,9 +1,9 @@
 package shorturl
 
 import (
-	"github.com/micro-services-roadmap/uid-generator-go/generator"
-	"github.com/micro-services-roadmap/uid-generator-go/generator/generators"
-	"github.com/micro-services-roadmap/uid-generator-go/utilu"
+	"github.com/gomsr/atom-uid/generator"
+	"github.com/gomsr/atom-uid/generator/generators"
+	"github.com/gomsr/atom-uid/utilu"
 	"math/rand"
 )
 

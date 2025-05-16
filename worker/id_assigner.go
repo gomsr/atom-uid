@@ -1,6 +1,6 @@
 package worker
 
-import "github.com/micro-services-roadmap/uid-generator-go/worker/workers"
+import "github.com/gomsr/atom-uid/worker/workers"
 
 type Type uint
 

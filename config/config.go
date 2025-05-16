@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/micro-services-roadmap/uid-generator-go/generator"
-	"github.com/micro-services-roadmap/uid-generator-go/worker"
+	"github.com/gomsr/atom-uid/generator"
+	"github.com/gomsr/atom-uid/worker"
 )
 
 type Config struct {

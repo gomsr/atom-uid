@@ -2,7 +2,7 @@ package generators
 
 import (
 	"fmt"
-	"github.com/micro-services-roadmap/uid-generator-go/worker"
+	"github.com/gomsr/atom-uid/worker"
 	"testing"
 	"time"
 )

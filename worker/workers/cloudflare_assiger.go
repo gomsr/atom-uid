@@ -1,7 +1,7 @@
 package workers
 
 import (
-	"github.com/micro-services-roadmap/cloudflare/kvs/worker"
+	"github.com/gomsr/atom-cloudflare/kvs/worker"
 )
 
 type CloudflareAssigner struct{}

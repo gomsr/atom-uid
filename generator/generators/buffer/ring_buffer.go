@@ -3,7 +3,7 @@ package buffer
 import (
 	"errors"
 	"fmt"
-	"github.com/micro-services-roadmap/uid-generator-go/utilu"
+	"github.com/gomsr/atom-uid/utilu"
 	"sync"
 	"sync/atomic"
 )

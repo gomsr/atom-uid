@@ -3,9 +3,9 @@ package generators
 import (
 	"errors"
 	"fmt"
-	"github.com/micro-services-roadmap/uid-generator-go/config"
-	"github.com/micro-services-roadmap/uid-generator-go/generator"
-	"github.com/micro-services-roadmap/uid-generator-go/worker"
+	"github.com/gomsr/atom-uid/config"
+	"github.com/gomsr/atom-uid/generator"
+	"github.com/gomsr/atom-uid/worker"
 	"sync"
 	"time"
 )
